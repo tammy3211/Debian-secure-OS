@@ -1,0 +1,12 @@
+[Hotkey]
+EnumerateWithTriggerKeys=False
+
+[Hotkey/TriggerKeys]
+0=Hangul
+1=Alt_R
+2=Control+space
+
+[Hotkey/AltTriggerKeys]
+
+[Behavior]
+ActiveByDefault=False

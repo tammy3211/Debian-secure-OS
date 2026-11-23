@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=USB desktop preferences
+Exec=/usr/local/bin/live-profile session
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

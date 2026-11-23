@@ -1,0 +1,7 @@
+#!/usr/bin/python3
+import os,sys
+args=sys.argv[1:]
+if args in (['now'],['-h','now'],['-P','now']):operation='poweroff'
+elif args==['-r','now']:operation='reboot'
+else:raise SystemExit('종료 보호: shutdown now 또는 shutdown -r now를 사용하세요.')
+os.execv('/usr/local/bin/live-power',['live-power',operation])

@@ -1,0 +1,5 @@
+{
+  "node": "/etc/skel/.nvm/versions/node/v26.13.1/bin/node",
+  "cli": "/opt/live-codex/node_modules/@openai/codex/bin/codex.js",
+  "version": "0.169.0"
+}

@@ -1,0 +1,92 @@
+#!/usr/bin/python3
+"""Find only the nominated USB store; apply preferences as the live user before GDM."""
+from pathlib import Path
+import hashlib
+import json
+import os
+import pwd
+import re
+import subprocess
+
+MOUNT=Path('/run/live-profile')
+STATUS=Path('/run/live-profile-status.json')
+
+def record(data):
+    temp=STATUS.with_suffix('.tmp')
+    temp.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+    temp.chmod(0o644)
+    os.replace(temp,STATUS)
+
+def usb_backed(device,seen=None):
+    seen=set() if seen is None else seen
+    path=Path(device).resolve()
+    name=path.name
+    if name in seen or not path.is_block_device(): return False
+    seen.add(name)
+    node=Path('/sys/class/block')/name
+    if not node.exists(): return False
+    slaves=list((node/'slaves').iterdir()) if (node/'slaves').is_dir() else []
+    if slaves: return all(usb_backed('/dev/'+item.name,seen.copy()) for item in slaves)
+    return bool(re.search(r'/usb[0-9]+/',str(node.resolve())))
+
+def marker(directory,expected):
+    path=directory/'LiveProfile/store.json'
+    try:
+        return not path.is_symlink() and path.stat().st_size<16384 and json.loads(path.read_text(encoding='utf-8-sig')).get('id')==expected
+    except (OSError,ValueError): return False
+
+def command(*args): subprocess.run(args,check=True,timeout=8,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+
+def main():
+    base={'enabled':False,'message':'설정 USB가 연결되지 않아 ISO 기본값을 사용합니다.'}
+    record(base)
+    if 'live-profile=off' in Path('/proc/cmdline').read_text().split():
+        record({**base,'message':'이번 부팅은 USB 설정 복원을 건너뜁니다.'});return
+    policy=json.loads(Path('/etc/live-profile/store.json').read_text())
+    account=pwd.getpwuid(1000)
+    identity=''
+    for name in ('product_uuid','sys_vendor','product_name','board_name'):
+        try: identity+=Path('/sys/class/dmi/id',name).read_text().strip()+'\n'
+        except OSError: pass
+    machine=hashlib.sha256(identity.encode()).hexdigest()[:24]
+    MOUNT.mkdir(mode=0o755,exist_ok=True)
+    used=False
+    mounts=json.loads(subprocess.check_output(['findmnt','--json','--list','-o','SOURCE,TARGET,FSTYPE'],text=True)).get('filesystems',[])
+    for item in mounts:
+        if item.get('fstype')=='exfat' and usb_backed(item['source']) and marker(Path(item['target']),policy['id']):
+            command('mount','--bind',item['target'],str(MOUNT))
+            command('mount','-o','remount,bind,rw,nosuid,nodev,noexec',str(MOUNT))
+            used=True;break
+    if not used:
+        for device in ('/dev/mapper/VentoyPart','/dev/disk/by-label/Ventoy'):
+            if not usb_backed(device): continue
+            try:
+                command('mount','-t','exfat','-o',f'ro,nosuid,nodev,noexec,uid={account.pw_uid},gid={account.pw_gid},umask=0077',device,str(MOUNT))
+                if marker(MOUNT,policy['id']):
+                    command('mount','-o','remount,rw,nosuid,nodev,noexec',str(MOUNT))
+                    used=True;break
+            except subprocess.SubprocessError: pass
+            if os.path.ismount(MOUNT): command('umount',str(MOUNT))
+    if not used: return
+    store=MOUNT/'LiveProfile'
+    writable=subprocess.run(['runuser','-u',account.pw_name,'--','test','-w',str(store)]).returncode==0
+    if not writable:
+        record({**base,'message':'설정 USB가 쓰기 불가 상태여서 ISO 기본값을 사용합니다.'});return
+    status={'enabled':True,'store':str(store),'machine':machine,'restored':False,'message':'USB 설정 프로필 연결됨'}
+    record(status)
+    runtime=Path('/run/live-profile-user')
+    runtime.mkdir(mode=0o700,exist_ok=True)
+    os.chown(runtime,account.pw_uid,account.pw_gid)
+    result=subprocess.run(['runuser','-u',account.pw_name,'--','env','HOME='+account.pw_dir,
+      'XDG_RUNTIME_DIR='+str(runtime),'dbus-run-session','--','/usr/local/bin/live-profile','restore'],
+      text=True,capture_output=True,timeout=15)
+    if result.returncode==0:
+        try: status['restored']=json.loads(result.stdout).get('restored',False)
+        except ValueError: pass
+    else: status['message']='프로필 복원 실패: ISO 기본값으로 계속합니다.'
+    record(status)
+
+if __name__=='__main__':
+    try: main()
+    except Exception as error:
+        record({'enabled':False,'message':'USB 설정 복원을 건너뜁니다: '+str(error)})

@@ -1,0 +1,12 @@
+firmware-linux
+firmware-intel-graphics
+firmware-amd-graphics
+firmware-nvidia-graphics
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-brcm80211
+firmware-mediatek
+firmware-intel-sound
+pciutils
+usbutils

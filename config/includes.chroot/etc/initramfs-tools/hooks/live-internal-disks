@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "${1-}" in prereqs) prereqs; exit 0 ;; esac
+. /usr/share/initramfs-tools/hook-functions
+copy_exec /usr/sbin/blockdev /usr/sbin
+copy_exec /usr/bin/readlink /usr/bin
+copy_exec /usr/bin/cat /usr/bin
+mkdir -p "$DESTDIR/usr/local/sbin" "$DESTDIR/etc/udev/rules.d"
+cp /usr/local/sbin/live-internal-disk "$DESTDIR/usr/local/sbin/"
+cp /etc/udev/rules.d/99-live-internal-disks.rules "$DESTDIR/etc/udev/rules.d/"

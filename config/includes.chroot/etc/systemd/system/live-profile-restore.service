@@ -1,0 +1,14 @@
+[Unit]
+Description=Restore selected desktop preferences from the nominated USB
+After=live-config.service local-fs.target
+Before=display-manager.service gdm.service gdm3.service
+ConditionKernelCommandLine=boot=live
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/live-profile-boot
+TimeoutStartSec=45
+RemainAfterExit=yes
+
+[Install]
+WantedBy=graphical.target

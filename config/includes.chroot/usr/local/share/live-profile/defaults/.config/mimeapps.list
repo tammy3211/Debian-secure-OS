@@ -1,0 +1,12 @@
+[Default Applications]
+text/x-python=code.desktop;
+application/x-python-code=code.desktop;
+video/mp4=vlc.desktop;
+video/x-matroska=vlc.desktop;
+video/webm=vlc.desktop;
+video/x-msvideo=vlc.desktop;
+audio/mpeg=vlc.desktop;
+image/jpeg=org.gnome.Loupe.desktop;
+image/png=org.gnome.Loupe.desktop;
+image/webp=org.gnome.Loupe.desktop;
+application/pdf=org.gnome.Evince.desktop;

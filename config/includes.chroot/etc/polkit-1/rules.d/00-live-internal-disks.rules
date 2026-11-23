@@ -1,0 +1,18 @@
+// Mounting is allowed only after block-level read-only protection is confirmed.
+// Other UDisks operations on internal drives remain denied.
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.freedesktop.udisks2.") !== 0) return;
+    if (action.id === "org.freedesktop.udisks2.manage-swapspace")
+        return polkit.Result.NO;
+    var device = action.lookup("device") || "";
+    if (/^\/dev\/(nvme[0-9]+n[0-9]+|sd[a-z]+|mmcblk[0-9]+)(p?[0-9]+)?$/.test(device)) {
+        try {
+            if (polkit.spawn(["/usr/local/sbin/live-internal-disk", device.substring(5)]).trim() === "protect") {
+                if (action.id.indexOf("org.freedesktop.udisks2.filesystem-mount") === 0 &&
+                    polkit.spawn(["/usr/sbin/blockdev", "--getro", device]).trim() === "1")
+                    return polkit.Result.YES;
+                return polkit.Result.NO;
+            }
+        } catch (error) { return polkit.Result.NO; }
+    }
+});

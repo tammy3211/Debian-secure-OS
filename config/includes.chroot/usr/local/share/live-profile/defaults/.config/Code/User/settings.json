@@ -1,0 +1,11 @@
+{
+  "python.defaultInterpreterPath": "/usr/bin/python3",
+  "telemetry.telemetryLevel": "off",
+  "update.mode": "none",
+  "extensions.autoUpdate": false,
+  "files.eol": "\n",
+  "editor.tabSize": 4,
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "window.restoreWindows": "none",
+  "workbench.startupEditor": "none"
+}

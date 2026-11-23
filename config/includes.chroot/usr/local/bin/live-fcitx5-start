@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+has_owner() {
+    gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+      --method org.freedesktop.DBus.NameHasOwner "$1" 2>/dev/null | grep -q true
+}
+if has_owner org.fcitx.Fcitx5; then exit 0; fi
+case "${XDG_CURRENT_DESKTOP:-}" in
+  *GNOME*)
+    attempt=0
+    while [ "$attempt" -lt 60 ]; do
+      if has_owner org.kde.impanel; then break; fi
+      sleep 0.5
+      attempt=$((attempt + 1))
+    done
+    ;;
+esac
+exec /usr/bin/fcitx5 "$@"

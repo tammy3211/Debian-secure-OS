@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=My App
+Exec="@VC_MOUNT@/APP/MyApp/start.sh"
+Path=@VC_MOUNT@/APP/MyApp
+Icon=@VC_MOUNT@/APP/MyApp/icon.png
+Terminal=false
+Categories=Utility;

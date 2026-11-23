@@ -1,0 +1,19 @@
+[org/gnome/desktop/peripherals/mouse]
+speed=-0.2
+
+[org/gnome/settings-daemon/plugins/power]
+sleep-inactive-ac-type='nothing'
+sleep-inactive-battery-type='nothing'
+
+[org/gnome/desktop/session]
+idle-delay=uint32 600
+
+[org/gnome/desktop/interface]
+clock-format='24h'
+
+[org/gnome/desktop/privacy]
+remember-recent-files=false
+
+[org/gnome/desktop/input-sources]
+sources=[('xkb', 'us')]
+xkb-options=['korean:ralt_hangul']

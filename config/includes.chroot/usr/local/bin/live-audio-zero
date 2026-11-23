@@ -1,0 +1,14 @@
+#!/bin/sh
+# Set the initial output level once, without toggling the mute switch.
+set -eu
+attempt=0
+while [ "$attempt" -lt 30 ]; do
+    if wpctl get-volume @DEFAULT_AUDIO_SINK@ >/dev/null 2>&1 &&
+       wpctl set-volume @DEFAULT_AUDIO_SINK@ 0 >/dev/null 2>&1; then
+        exit 0
+    fi
+    attempt=$((attempt + 1))
+    sleep 1
+done
+echo 'No default audio output became available during session startup.' >&2
+exit 1

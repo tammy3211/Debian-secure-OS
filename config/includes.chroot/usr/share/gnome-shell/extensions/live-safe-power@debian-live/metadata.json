@@ -1,0 +1,1 @@
+{"uuid":"live-safe-power@debian-live","name":"VeraCrypt Safe Shutdown","description":"Dismount encrypted volumes before confirming shutdown","shell-version":["48"],"version":1}

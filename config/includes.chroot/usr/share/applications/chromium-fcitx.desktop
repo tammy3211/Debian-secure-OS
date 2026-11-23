@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Chromium (Korean Input)
+Comment=Chromium with Fcitx5 support
+Exec=/usr/local/bin/chromium-fcitx %U
+Icon=chromium
+Terminal=false
+Categories=Network;WebBrowser;

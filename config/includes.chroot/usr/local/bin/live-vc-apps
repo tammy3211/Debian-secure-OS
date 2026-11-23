@@ -1,0 +1,169 @@
+#!/usr/bin/python3
+"""Register mounted VeraCrypt APP launchers; execute only after a user launch."""
+from pathlib import Path
+import fcntl
+import hashlib
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
+import gi
+gi.require_version('Gio','2.0')
+from gi.repository import Gio,GLib
+
+HOME=Path.home()
+RUNTIME=Path(os.environ.get('XDG_RUNTIME_DIR','/run/user/'+str(os.getuid())))/'live-vc-apps'
+APPS=Path(os.environ.get('XDG_DATA_HOME',str(HOME/'.local/share')))/'applications'
+PREFIX='live-vc-'
+SLOT=re.compile(r'/media/veracrypt(?:[1-9]|[1-5][0-9]|6[0-4])')
+OLD_SLOT=re.compile(r'/media/veracrypt(?:[1-9][0-9]?|\*)(?=/|["\s]|$)')
+
+def initialize():
+    RUNTIME.mkdir(mode=0o700,parents=True,exist_ok=True)
+    if RUNTIME.is_symlink() or RUNTIME.stat().st_uid!=os.getuid():raise RuntimeError('Invalid runtime directory')
+    APPS.mkdir(parents=True,exist_ok=True)
+
+def atomic(path,text):
+    fd,name=tempfile.mkstemp(prefix='.vc-',dir=path.parent)
+    try:
+        with os.fdopen(fd,'w') as stream:stream.write(text)
+        os.replace(name,path)
+    finally:Path(name).unlink(missing_ok=True)
+
+def decode(value):return re.sub(r'\\([0-7]{3})',lambda m:chr(int(m[1],8)),value)
+
+def mounts():
+    found={}
+    for line in Path('/proc/self/mountinfo').read_text().splitlines():
+        left,right=line.split(' - ',1);fields=left.split();extra=right.split()
+        target=decode(fields[4]);source=decode(extra[1])
+        if not SLOT.fullmatch(target) or fields[3]!='/':continue
+        # Check the mapped device, not merely a directory named veracryptN.
+        try:name=(Path('/sys/dev/block')/fields[2]/'dm/name').read_text().strip()
+        except OSError:continue
+        if not re.fullmatch(r'veracrypt[1-9][0-9]*',name):continue
+        found[target]={'target':target,'device':fields[2],'mount_id':fields[0],'source':source}
+    return found
+
+def keyfile(path):
+    if path.is_symlink() or not path.is_file() or path.stat().st_size>262144:raise ValueError('Invalid launcher')
+    key=GLib.KeyFile()
+    key.load_from_file(str(path),GLib.KeyFileFlags.KEEP_TRANSLATIONS)
+    if key.get_string('Desktop Entry','Type')!='Application':raise ValueError('Not an application')
+    key.get_string('Desktop Entry','Name');key.get_string('Desktop Entry','Exec')
+    return key
+
+def quote(value):return '"'+str(value).replace('\\','\\\\').replace('"','\\"').replace('`','\\`').replace('$','\\$').replace('%','%%')+'"'
+
+def has_key(key,group,field):
+    try:return field in key.get_keys(group)[0]
+    except GLib.Error:return False
+
+def translated(key,mount,path):
+    target=mount['target']
+    for group in key.get_groups()[0]:
+        if group!='Desktop Entry' and not group.startswith('Desktop Action '):continue
+        for field in ('Exec','Path','Icon','TryExec'):
+            if not has_key(key,group,field):continue
+            value=key.get_string(group,field)
+            value=OLD_SLOT.sub(lambda _:target,value).replace('@VC_MOUNT@',target)
+            if field in ('Path','Icon','TryExec') and value and not value.startswith('/'):
+                candidate=path.parent/value
+                if field=='Path' or candidate.is_file():value=str(candidate)
+            key.set_string(group,field,value)
+    if not has_key(key,'Desktop Entry','Path'):key.set_string('Desktop Entry','Path',str(path.parent))
+    # Relative executable paths are resolved at the desktop file's directory.
+    for group in key.get_groups()[0]:
+        if not has_key(key,group,'Exec'):continue
+        command=key.get_string(group,'Exec')
+        match=re.match(r'^("(?:\\.|[^"\\])*"|[^\s]+)',command)
+        if match:
+            first=match[0].strip('"')
+            if not first.startswith('/') and (path.parent/first).is_file():
+                key.set_string(group,'Exec',quote(path.parent/first)+command[match.end():])
+    key.set_boolean('Desktop Entry','DBusActivatable',False)
+    return key
+
+def scan():
+    initialize();expected=set();current=mounts()
+    for mount in current.values():
+        directory=Path(mount['target'])/'APP'
+        if directory.is_symlink() or not directory.is_dir():continue
+        for path in sorted(directory.glob('*.desktop'))[:256]:
+            try:
+                key=translated(keyfile(path),mount,path)
+                identity=hashlib.sha256((mount['target']+'\0'+path.name).encode()).hexdigest()[:24]
+                entry=PREFIX+identity
+                metadata={**mount,'file':path.name}
+                atomic(RUNTIME/(entry+'.json'),json.dumps(metadata))
+                groups=key.get_groups()[0]
+                for group in groups:
+                    if not has_key(key,group,'Exec'):continue
+                    action='main' if group=='Desktop Entry' else hashlib.sha256(group.encode()).hexdigest()[:16]
+                    if group!='Desktop Entry' and not group.startswith('Desktop Action '):continue
+                    key.set_string(group,'Exec','/usr/local/bin/live-vc-apps launch '+entry+' '+action+' %U')
+                key.remove_key('Desktop Entry','TryExec') if has_key(key,'Desktop Entry','TryExec') else None
+                key.set_boolean('Desktop Entry','Terminal',False)
+                content=key.to_data()[0];output=APPS/(entry+'.desktop')
+                if not output.exists() or output.read_text()!=content:atomic(output,content)
+                expected.add(entry)
+            except (OSError,ValueError,GLib.Error):continue
+    for folder,suffix in ((APPS,'.desktop'),(RUNTIME,'.json')):
+        for path in folder.glob(PREFIX+'*'+suffix):
+            if path.stem not in expected:path.unlink(missing_ok=True)
+    return len(expected)
+
+def launch(entry,action,uris):
+    if not re.fullmatch(r'live-vc-[0-9a-f]{24}',entry):raise ValueError('Invalid app ID')
+    metadata=json.loads((RUNTIME/(entry+'.json')).read_text())
+    current=mounts().get(metadata['target'])
+    if not current or any(current[k]!=metadata[k] for k in ('device','mount_id','source')):
+        raise RuntimeError('VeraCrypt 볼륨을 먼저 마운트하세요.')
+    filename=metadata['file']
+    if Path(filename).name!=filename or not filename.endswith('.desktop'):raise ValueError('Invalid filename')
+    path=Path(current['target'])/'APP'/filename
+    if path.parent.is_symlink():raise ValueError('Linked APP directory')
+    key=translated(keyfile(path),current,path)
+    if action!='main':
+        group=next((g for g in key.get_groups()[0] if g.startswith('Desktop Action ') and hashlib.sha256(g.encode()).hexdigest()[:16]==action),None)
+        if not group:raise ValueError('Action no longer exists')
+        key.set_string('Desktop Entry','Exec',key.get_string(group,'Exec'))
+    # Gio expands the original desktop field codes; a shell is never inserted.
+    fd,name=tempfile.mkstemp(prefix='launch-',suffix='.desktop',dir=RUNTIME)
+    try:
+        with os.fdopen(fd,'w') as stream:stream.write(key.to_data()[0])
+        info=Gio.DesktopAppInfo.new_from_filename(name)
+        if info is None:raise ValueError('Invalid application command or executable unavailable')
+        info.launch_uris(uris,None)
+    finally:Path(name).unlink(missing_ok=True)
+
+def watch():
+    initialize()
+    with (RUNTIME/'watch.lock').open('w') as lock:
+        try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:return
+        stopped=threading.Event()
+        for sig in (signal.SIGTERM,signal.SIGINT):signal.signal(sig,lambda *_:stopped.set())
+        while not stopped.is_set():
+            try:scan()
+            except (OSError,ValueError,GLib.Error) as error:print(str(error),file=sys.stderr,flush=True)
+            stopped.wait(5)
+
+def main():
+    command=sys.argv[1] if len(sys.argv)>1 else 'scan'
+    if command=='watch':watch()
+    elif command=='scan':print(json.dumps({'registered':scan()}))
+    elif command=='launch':launch(sys.argv[2],sys.argv[3],sys.argv[4:])
+    else:raise ValueError('Unknown command')
+
+if __name__=='__main__':
+    try:main()
+    except Exception as error:
+        print(str(error),file=sys.stderr)
+        if sys.argv[1:2]==['launch']:
+            subprocess.run(['notify-send','VeraCrypt 앱 실행 실패',str(error)],check=False)
+        sys.exit(1)

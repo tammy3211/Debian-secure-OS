@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Desktop Preferences Profile
+Name[ko]=사용자 환경설정 프로필
+Comment=Save or reset selected desktop preferences on USB
+Comment[ko]=USB에 환경설정을 저장하거나 이전 설정을 복원합니다
+Exec=/usr/local/bin/live-profile panel
+Icon=preferences-system
+Terminal=false
+Categories=Settings;

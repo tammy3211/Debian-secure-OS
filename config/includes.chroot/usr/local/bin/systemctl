@@ -1,0 +1,10 @@
+#!/usr/bin/python3
+"""Route ordinary power actions through the encrypted-volume guard."""
+import os,sys
+args=sys.argv[1:]
+action=next((arg for arg in args if not arg.startswith('-')),None)
+if action in ('poweroff','reboot'):
+    if any(arg not in (action,'--no-block','--no-wall','--check-inhibitors=yes') for arg in args):
+        raise SystemExit('종료 보호: 일반 poweroff/reboot만 지원합니다.')
+    os.execv('/usr/local/bin/live-power',['live-power',action])
+os.execv('/usr/bin/systemctl',['/usr/bin/systemctl',*args])

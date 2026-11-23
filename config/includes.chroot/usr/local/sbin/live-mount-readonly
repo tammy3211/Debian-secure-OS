@@ -1,0 +1,37 @@
+#!/bin/sh
+# Explicit mount path for internal partitions. Never repairs filesystems or sets RW.
+set -eu
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+[ "$(id -u)" = 0 ] || { echo 'Run: sudo live-mount-readonly /dev/PARTITION' >&2; exit 1; }
+[ "$#" = 1 ] || { echo 'Usage: sudo live-mount-readonly /dev/PARTITION' >&2; exit 1; }
+device=$(readlink -f -- "$1")
+[ -b "$device" ] || { echo 'Not a block device' >&2; exit 1; }
+name=${device##*/}
+[ "$(/usr/local/sbin/live-internal-disk "$name")" = protect ] || {
+    echo 'Only fixed internal disks are handled; USB/VeraCrypt are excluded.' >&2; exit 1;
+}
+[ -f "/sys/class/block/$name/partition" ] || { echo 'Select a partition, not a whole disk.' >&2; exit 1; }
+if findmnt -rn -S "$device" >/dev/null; then
+    echo 'Partition already mounted; inspect findmnt first.' >&2; exit 1
+fi
+parent=$(readlink -f "/sys/class/block/$name")
+parent=${parent%/*}
+blockdev --setro "/dev/${parent##*/}"
+blockdev --setro "$device"
+[ "$(blockdev --getro "$device")" = 1 ] || exit 1
+fstype=$(blkid -p -s TYPE -o value "$device")
+options=ro,noatime,nosuid,nodev,noexec
+case "$fstype" in
+    ntfs) fstype=ntfs3 ;;
+    ext3|ext4) options=$options,noload ;;
+    xfs) options=$options,norecovery ;;
+    ext2|vfat|exfat|btrfs) ;;
+    *) echo "Unsupported filesystem: $fstype (no repair attempted)" >&2; exit 1 ;;
+esac
+target=/media/internal-$name
+mkdir -p "$target"
+if findmnt -rn -M "$target" >/dev/null; then
+    echo 'Mount point already occupied.' >&2; exit 1
+fi
+mount -t "$fstype" -o "$options" "$device" "$target"
+findmnt -M "$target" -o SOURCE,TARGET,FSTYPE,OPTIONS

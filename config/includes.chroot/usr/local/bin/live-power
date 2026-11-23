@@ -1,0 +1,17 @@
+#!/usr/bin/python3
+import os,sys
+from gi.repository import Gio,GLib
+name=os.path.basename(sys.argv[0])
+if name in ('poweroff','reboot'):
+    if len(sys.argv)>1:raise SystemExit('이 종료 보호 명령은 추가 옵션을 받지 않습니다.')
+    operation=name
+else:operation=sys.argv[1] if len(sys.argv)>1 else 'poweroff'
+if operation not in ('poweroff','reboot','check'):raise SystemExit('Use: live-power poweroff|reboot|check')
+try:
+    bus=Gio.bus_get_sync(Gio.BusType.SYSTEM,None)
+    ok,message=bus.call_sync('org.debianlive.SafePower','/org/debianlive/SafePower',
+      'org.debianlive.SafePower','Request',GLib.Variant('(s)',(operation,)),
+      GLib.VariantType.new('(bs)'),0,180000,None).unpack()
+    print(message)
+    raise SystemExit(0 if ok else 1)
+except GLib.Error as error:raise SystemExit('종료 보호 서비스 오류: '+str(error))

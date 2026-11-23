@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Initial output volume
+Exec=/usr/local/bin/live-audio-zero
+Hidden=true
+NoDisplay=true

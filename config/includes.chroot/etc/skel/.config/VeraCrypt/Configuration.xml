@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VeraCrypt><configuration>
+<config key="FilesystemOptions">exec,uid=1000,gid=1000,fmask=0022,dmask=0022,nosuid,nodev</config>
+<config key="SaveHistory">0</config>
+<config key="CachePasswords">0</config>
+</configuration></VeraCrypt>

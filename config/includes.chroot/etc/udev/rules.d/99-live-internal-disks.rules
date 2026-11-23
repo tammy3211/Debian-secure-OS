@@ -1,0 +1,5 @@
+# Apply only to physical disk families; USB and removable media are excluded by classifier.
+ACTION!="add|change", GOTO="live_internal_end"
+SUBSYSTEM!="block", GOTO="live_internal_end"
+PROGRAM="/usr/local/sbin/live-internal-disk %k", RESULT=="protect", ENV{UDISKS_IGNORE}="0", ENV{UDISKS_SYSTEM}="1", ENV{UDISKS_AUTO}="0", RUN+="/usr/sbin/blockdev --setro /dev/%k"
+LABEL="live_internal_end"

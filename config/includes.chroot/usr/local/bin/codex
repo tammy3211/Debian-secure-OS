@@ -1,0 +1,62 @@
+#!/usr/bin/python3
+"""Select encrypted or per-login RAM state before invoking the bundled CLI."""
+from pathlib import Path
+import json,os,runpy,sys,tempfile
+
+RUNTIME_BASE=Path('/run/user')/str(os.getuid())
+
+def choose_store():
+    detector=runpy.run_path('/usr/local/bin/live-vc-apps',run_name='mount_detector')
+    mounted=detector['mounts']()
+    targets=[Path(item['target']) for item in mounted.values()]
+    configured=[target for target in targets if (target/'APP/Codex').is_dir()]
+    if len(configured)==1:targets=configured
+    elif len(targets)>1:raise RuntimeError('VeraCrypt 볼륨이 여러 개입니다. 사용할 볼륨 한 곳에 APP/Codex 폴더를 준비하세요.')
+    if targets:
+        target=targets[0];store=target/'APP/Codex/state'
+        if not store.resolve().is_relative_to(target.resolve()):raise RuntimeError('Codex 저장 경로가 볼륨 밖을 가리킵니다.')
+        return store,'암호화 저장'
+    if not RUNTIME_BASE.is_dir() or RUNTIME_BASE.stat().st_uid!=os.getuid():
+        raise RuntimeError('사용자 RAM 런타임 디렉터리가 없습니다. 일반 Live 사용자로 로그인하세요.')
+    return RUNTIME_BASE/'codex-live','RAM 임시 저장 (현재 부팅 동안 유지)'
+
+def prepare():
+    store,mode=choose_store()
+    store.mkdir(parents=True,mode=0o700,exist_ok=True)
+    # A read-only encrypted store is an error, never a silent RAM fallback.
+    fd,probe=tempfile.mkstemp(prefix='.write-check-',dir=store)
+    os.close(fd);Path(probe).unlink()
+    config=store/'config.toml'
+    try:
+        with config.open('x') as stream:stream.write('cli_auth_credentials_store = "file"\n')
+    except FileExistsError:pass
+    paths={'CODEX_HOME':store,'CODEX_SQLITE_HOME':store/'sqlite',
+           'XDG_CACHE_HOME':store/'cache','XDG_CONFIG_HOME':store/'xdg-config',
+           'XDG_DATA_HOME':store/'xdg-data','XDG_STATE_HOME':store/'xdg-state',
+           'npm_config_cache':store/'cache/npm'}
+    for name,path in paths.items():
+        path.mkdir(parents=True,mode=0o700,exist_ok=True)
+        os.environ[name]=str(path)
+    print('[Codex] '+mode+': '+str(store),file=sys.stderr,flush=True)
+    return store
+
+def main():
+    store=prepare()
+    if str(store).startswith('/media/veracrypt'):
+        # exFAT cannot hold Codex's executable helper symlinks. The broker
+        # binds a private RAM directory at state/tmp for these temporary files.
+        from gi.repository import Gio,GLib
+        bus=Gio.bus_get_sync(Gio.BusType.SYSTEM,None)
+        bus.call_sync('org.debianlive.SafePower','/org/debianlive/SafePower',
+          'org.debianlive.SafePower','PrepareCodexRuntime',GLib.Variant('(s)',(str(store),)),
+          None,0,15000,None)
+    settings=json.loads(Path('/usr/local/share/live-apps/codex-runtime.json').read_text())
+    args=[settings['node'],settings['cli'],'-c','cli_auth_credentials_store="file"',
+          '-c','sqlite_home='+json.dumps(str(store/'sqlite')),
+          '-c','log_dir='+json.dumps(str(store/'logs')),*sys.argv[1:]]
+    os.execv(args[0],args)
+
+if __name__=='__main__':
+    try:main()
+    except Exception as error:
+        print('Codex를 시작하지 못했습니다: '+str(error),file=sys.stderr);sys.exit(1)

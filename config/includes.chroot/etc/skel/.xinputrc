@@ -1,0 +1,4 @@
+# im-config sets client environment; the desktop autostart owns daemon startup.
+if [ "${IM_CONFIG_PHASE:-}" = 1 ]; then
+    run_im fcitx5
+fi

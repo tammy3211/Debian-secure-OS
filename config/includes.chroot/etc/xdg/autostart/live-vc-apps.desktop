@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=VeraCrypt portable application menus
+Exec=/usr/local/bin/live-vc-apps watch
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

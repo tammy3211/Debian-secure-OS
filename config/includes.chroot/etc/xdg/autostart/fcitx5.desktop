@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Fcitx 5
+Exec=/usr/local/bin/live-fcitx5-start -d
+Terminal=false
+X-GNOME-Autostart-enabled=true

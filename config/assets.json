@@ -1,0 +1,29 @@
+{
+  "node_version": "v26.13.1",
+  "assets": [
+    {
+      "file": "code_1.146.0-1794340865_amd64.deb",
+      "kind": "deb",
+      "url": "https://packages.microsoft.com/repos/code/pool/main/c/code/code_1.146.0-1794340865_amd64.deb",
+      "sha256": "f83565f7f11a60b256807fe2216da8405f9728f193754959695242eecd148992"
+    },
+    {
+      "file": "veracrypt_1.26.31-1~deb13-1_amd64.deb",
+      "kind": "deb",
+      "url": null,
+      "sha256": "ebd9e3c969ea2c9e3536ba00aeeb1ba1fb9c7564bb7901b176535e9ecc38657d"
+    },
+    {
+      "file": "node-v26.13.1-linux-x64.tar.xz",
+      "kind": "node",
+      "url": "https://nodejs.org/dist/v26.13.1/node-v26.13.1-linux-x64.tar.xz",
+      "sha256": "5c063e46bab0fbc1c17cc445d7ff129cbdcd0471be6ed83b6ab864f8143bc864"
+    },
+    {
+      "file": "nvm-v0.41.0.tar.gz",
+      "kind": "nvm",
+      "url": "https://codeload.github.com/nvm-sh/nvm/tar.gz/refs/tags/v0.41.0",
+      "sha256": "532560c9ecc6ef484279fcc1c600e9346537bc7913b891ffd0ec0caca5072694"
+    }
+  ]
+}

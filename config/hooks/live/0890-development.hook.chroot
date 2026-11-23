@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+for profile in /etc/skel/.bashrc /etc/skel/.profile; do
+    touch "$profile"
+    if ! grep -q '/usr/local/share/live-node-shell.sh' "$profile"; then
+        printf '\n[ ! -r /usr/local/share/live-node-shell.sh ] || . /usr/local/share/live-node-shell.sh\n' >> "$profile"
+    fi
+done
+python3 --version
+test -x /usr/bin/code
+test -x /usr/bin/vlc
+test -d /etc/skel/.nvm/versions/node
